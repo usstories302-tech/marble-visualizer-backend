@@ -1,70 +1,35 @@
-import express from "express";
-import cors from "cors";
-import multer from "multer";
-import dotenv from "dotenv";
-import { fal } from "@fal-ai/client";
-
-dotenv.config();
-
-const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
-
-app.use(cors());
-app.use(express.json());
-
-fal.config({
-  credentials: process.env.FAL_KEY
-});
-
-app.get("/", (req, res) => {
-  res.send("Marble Visualizer Backend Running");
-});
+import fetch from "node-fetch";
 
 app.post("/generate", upload.single("roomImage"), async (req, res) => {
   try {
     const marbleName = req.body.marbleName || "white Italian marble";
 
     const prompt = `
-Create a realistic interior marble visualization.
-Apply ${marbleName} to the main visible floor or wall surface.
-Keep furniture, room layout, lighting, shadows, camera angle and perspective natural.
-Do not change the room structure.
-Make it look like a premium marble showroom preview.
+Realistic luxury interior with ${marbleName} flooring or wall.
+Maintain realistic lighting, perspective and furniture.
 `;
 
-    const result = await fal.subscribe("fal-ai/flux/dev", {
-      input: {
-        prompt,
-        image_size: "landscape_4_3",
-        num_images: 1
-      }
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        version: "stability-ai/sdxl",
+        input: { prompt }
+      })
     });
 
-    const imageUrl = result.data.images?.[0]?.url;
-
-    if (!imageUrl) {
-      return res.status(500).json({
-        success: false,
-        message: "No image returned from fal.ai"
-      });
-    }
+    const data = await response.json();
 
     res.json({
       success: true,
-      imageUrl
+      imageUrl: data.output?.[0]
     });
 
   } catch (error) {
-    console.error("Generation Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Image generation failed"
-    });
+    console.error(error);
+    res.status(500).json({ success: false });
   }
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
